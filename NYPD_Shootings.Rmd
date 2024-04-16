@@ -14,25 +14,27 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The first few cells will be importing and cleaning the NYPD Historical Shooting Data into R. We also will load all our packages for use throughout the entire script.
 
-```{r}
+```{r, echo=TRUE, message=FALSE}
 library(tidyr)
 library(ggplot2)
 library(dplyr)
-library(ggmap)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(viridis)
+library(RCurl)
 ```
 
 
 ```{r}
-nypd <- read.csv('/Users/alec/Desktop/School_MS_DS/Spring_1_24/Intro to DS/week3/NYPD_Shooting_Incident_Data__Historic_.csv')
+x <- getURL("https://raw.githubusercontent.com/alec-sekelsky/NYPD-Shooting-Data/main/NYPD_Shooting_Incident_Data__Historic_.csv")
+nypd <- read.csv(text = x)
+
 summary(nypd)
 ```
 
 ## Basic Cleaning of the Data
 
-From a glance at the data, we can see some columns that may be irrelevant for a simple analyis. Headers like jurisdiction code, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, Latitude, Longitude, and Lon_lat will most likely be removed. Latitude and Longitude also have several NA values which would not be worth much to us. There are a few others like PERP_SEX, PERP_AGE_GROUP, PERP_RACE may be removed, but could be useful. There are a lot of missing data points in those columns rendering them mostly unuseful. This is a very clean data set making our job pretty easy.
+From a glance at the data, we can see some columns that may be irrelevant for a simple analyis. Headers like jurisdiction code, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, and Lon_lat will most likely be removed. Latitude and Longitude also have several NA values which would we can remove, as I will use these later in the analysis. There are a few others like PERP_SEX, PERP_AGE_GROUP, PERP_RACE may be removed, but could be useful. There are a lot of missing data points in those columns rendering them mostly unuseful. This is a very clean data set making our job pretty easy. We are also going to r
 
 ```{r}
 nypd_sub <- subset(nypd, select = -c(JURISDICTION_CODE, LOC_CLASSFCTN_DESC, LOCATION_DESC, LOC_OF_OCCUR_DESC, PERP_SEX, PERP_AGE_GROUP, PERP_RACE, X_COORD_CD, Y_COORD_CD) )
@@ -89,17 +91,15 @@ This chart shows total shootings by Borough. This chart gives a brief insight in
 ```{r}
 world_map <- ne_countries(scale = "medium", returnclass = "sf")
 
-# Fetch map image from OpenStreetMap
 map <- ggplot() +
   geom_sf(data = world_map, fill = "lightgray", color = "white") +
   coord_sf(xlim = range(nypd_sub$Longitude), ylim = range(nypd_sub$Latitude)) +
   theme_void()
 
-# Create the density plot
 map +
   stat_density_2d(data = nypd_sub, aes(x = Longitude, y = Latitude, fill = after_stat(level)),
                   geom = "polygon", color = "white", alpha = 0.5) +
-  scale_fill_viridis_c(option = "plasma", name = "Density") +  # Change the color option as needed
+  scale_fill_viridis_c(option = "plasma", name = "Density") + 
   theme_void()
 ```
 This last chart shows a desnity plot of shootings and where they occur. It backs up the bar chart above showing that Queens, Brooklyn, and the Bronx are the most frequent areas of a shooting occuring. 
