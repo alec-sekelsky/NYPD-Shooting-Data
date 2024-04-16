@@ -1,0 +1,129 @@
+---
+title: "NYPD Shooting Data"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-03-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing Data and Libraries
+
+The first few cells will be importing and cleaning the NYPD Historical Shooting Data into R. We also will load all our packages for use throughout the entire script.
+
+```{r}
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(ggmap)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(viridis)
+```
+
+
+```{r}
+nypd <- read.csv('/Users/alec/Desktop/School_MS_DS/Spring_1_24/Intro to DS/week3/NYPD_Shooting_Incident_Data__Historic_.csv')
+summary(nypd)
+```
+
+## Basic Cleaning of the Data
+
+From a glance at the data, we can see some columns that may be irrelevant for a simple analyis. Headers like jurisdiction code, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, Latitude, Longitude, and Lon_lat will most likely be removed. Latitude and Longitude also have several NA values which would not be worth much to us. There are a few others like PERP_SEX, PERP_AGE_GROUP, PERP_RACE may be removed, but could be useful. There are a lot of missing data points in those columns rendering them mostly unuseful. This is a very clean data set making our job pretty easy.
+
+```{r}
+nypd_sub <- subset(nypd, select = -c(JURISDICTION_CODE, LOC_CLASSFCTN_DESC, LOCATION_DESC, LOC_OF_OCCUR_DESC, PERP_SEX, PERP_AGE_GROUP, PERP_RACE, X_COORD_CD, Y_COORD_CD) )
+nypd_sub <- nypd_sub[complete.cases(nypd_sub[]),]
+summary(nypd_sub)
+```
+## Visualizing the Data
+
+```{r}
+nypd_sub$OCCUR_DATE <- as.Date(nypd_sub$OCCUR_DATE, format = "%m/%d/%Y")
+nypd_sub$Year <- format(nypd_sub$OCCUR_DATE, "%Y")
+
+ggplot(nypd_sub, aes(x = Year)) +
+  geom_bar() +
+  labs(title = "Shooting Incident Counts by Year",
+       x = "Year",
+       y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+This first chart shows the shooting incidents grouped in a bar chart by year. I find it interesting that total shootings were in a decline until 2020 and then shot up by almost 1000. You would think that with lockdowns in place for the 2020 COVID Pandemic we would see a decline.
+
+```{r}
+nypd$OCCUR_TIME <- as.POSIXct(strptime(nypd$OCCUR_TIME, format = "%H:%M:%S"))
+
+nypd$Hour <- as.numeric(format(nypd$OCCUR_TIME, "%H"))
+
+hourly_counts <- table(nypd$Hour)
+
+hourly_counts_df <- data.frame(Hour = as.numeric(names(hourly_counts)), Frequency = as.numeric(hourly_counts))
+
+ggplot(hourly_counts_df, aes(x = Hour, y = Frequency)) +
+  geom_point() +
+  labs(title = "Frequency of Shootings by Time of Day",
+       x = "Hour of Day",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+This second plot shows frequency of shootings compared to time of day. We can infer from this chart that as the day goes on there is more of a likeliehood of a shooting occuring during nighttime hours. 
+
+```{r}
+nypd_sub %>%
+  group_by(BORO) %>%
+  summarise(incident_count = n()) %>%
+  ggplot(aes(x = BORO, y = incident_count, fill = BORO)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Shooting Incident Counts by Borough",
+       x = "Borough",
+       y = "Incident Count") +
+  theme_minimal()
+```
+This chart shows total shootings by Borough. This chart gives a brief insight into boroughs that can be inferred as more dangerous or violent. I would like to dive deeper into this analysis in the future. More data can be used to supplement this and possibly give some leads into why we see more violent crime in these boroughs.
+
+```{r}
+world_map <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Fetch map image from OpenStreetMap
+map <- ggplot() +
+  geom_sf(data = world_map, fill = "lightgray", color = "white") +
+  coord_sf(xlim = range(nypd_sub$Longitude), ylim = range(nypd_sub$Latitude)) +
+  theme_void()
+
+# Create the density plot
+map +
+  stat_density_2d(data = nypd_sub, aes(x = Longitude, y = Latitude, fill = after_stat(level)),
+                  geom = "polygon", color = "white", alpha = 0.5) +
+  scale_fill_viridis_c(option = "plasma", name = "Density") +  # Change the color option as needed
+  theme_void()
+```
+This last chart shows a desnity plot of shootings and where they occur. It backs up the bar chart above showing that Queens, Brooklyn, and the Bronx are the most frequent areas of a shooting occuring. 
+
+## Data Model
+
+```{r}
+nypd_mod_sub = subset(nypd, select = c(STATISTICAL_MURDER_FLAG, PRECINCT, X_COORD_CD, Y_COORD_CD))
+
+nypd_mod_sub = na.omit(nypd_mod_sub)
+nypd_mod_sub$STATISTICAL_MURDER_FLAG <- as.numeric(nypd_mod_sub$STATISTICAL_MURDER_FLAG == "true")
+
+model = lm(nypd_mod_sub$STATISTICAL_MURDER_FLAG ~ nypd_mod_sub$PRECINCT + nypd_mod_sub$X_COORD_CD + nypd_mod_sub$Y_COORD_CD)
+summary(model)
+```
+Looking at the summary of this model, we can tell its a very poor model. With an $R^2$ of 0.00014 and a p-value of 0.2966 there is much to improve on future models. Using this as a predictor for where a murder might of occured is not something I would do.
+
+## Potential Bias
+
+The biggest thing that stands out to me in terms of Bias when analyzing this data is the assumptions we may make about our conclusions. In my second graph, I showed NYPD shootings by Borough. Brooklyn showed as the most frequent Borough for shootings, but why? Was there actually an uptick of crime or violence in that area requiring officers using lethal force or is there another reason? Maybe the training is more poor there or there are less officers and they are put in more dangerous situations. We would need to have some amplifing data here to confirm our bias.
+
+We should also consider population of a borough, i.e. a borough with a lower population may have a lower freuquncy of shootings than a borough with a much larger population.
+
+```{r}
+sessionInfo()
+```
+
