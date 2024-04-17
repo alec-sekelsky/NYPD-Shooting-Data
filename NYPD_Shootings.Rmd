@@ -10,6 +10,10 @@ date: "2024-03-22"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## What are we looking for?
+
+In this analysis, I want to look for the neihgborhoods where shootings occur the most, as well as times of day and trends on when shootings occur to better inform decision makers on how to best use their law enforcement and community resources.
+
 ## Importing Data and Libraries
 
 The first few cells will be importing and cleaning the NYPD Historical Shooting Data into R. We also will load all our packages for use throughout the entire script.
@@ -24,7 +28,6 @@ library(viridis)
 library(RCurl)
 ```
 
-
 ```{r}
 x <- getURL("https://raw.githubusercontent.com/alec-sekelsky/NYPD-Shooting-Data/main/NYPD_Shooting_Incident_Data__Historic_.csv")
 nypd <- read.csv(text = x)
@@ -34,13 +37,19 @@ summary(nypd)
 
 ## Basic Cleaning of the Data
 
-From a glance at the data, we can see some columns that may be irrelevant for a simple analyis. Headers like jurisdiction code, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, and Lon_lat will most likely be removed. Latitude and Longitude also have several NA values which would we can remove, as I will use these later in the analysis. There are a few others like PERP_SEX, PERP_AGE_GROUP, PERP_RACE may be removed, but could be useful. There are a lot of missing data points in those columns rendering them mostly unuseful. This is a very clean data set making our job pretty easy. We are also going to r
+From a glance at the data, we can see some columns that may be irrelevant for a simple analyis. Headers like jurisdiction code, LOC_CLASSFCTN_DESC, X_COORD_CD, Y_COORD_CD, and Lon_lat will most likely be removed. Latitude and Longitude also have several NA values which would we can remove, as I will use these columns later in the analysis. There are a few others like PERP_SEX, PERP_AGE_GROUP, PERP_RACE may be removed, but could be useful. There are a lot of missing data points in those columns rendering them mostly unuseful. This is a very clean data set making our job pretty easy. We are also going to change the statistical murder flag to integers with 0 as false and 1 as true.
 
 ```{r}
-nypd_sub <- subset(nypd, select = -c(JURISDICTION_CODE, LOC_CLASSFCTN_DESC, LOCATION_DESC, LOC_OF_OCCUR_DESC, PERP_SEX, PERP_AGE_GROUP, PERP_RACE, X_COORD_CD, Y_COORD_CD) )
+nypd$STATISTICAL_MURDER_FLAG [nypd$STATISTICAL_MURDER_FLAG == "true"] <- 1
+nypd$STATISTICAL_MURDER_FLAG [nypd$STATISTICAL_MURDER_FLAG == "false"] <- 0
+nypd$STATISTICAL_MURDER_FLAG <- as.integer(nypd$STATISTICAL_MURDER_FLAG)
+
+nypd_sub <- subset(nypd, select = -c(JURISDICTION_CODE, LOC_CLASSFCTN_DESC, LOCATION_DESC, LOC_OF_OCCUR_DESC, X_COORD_CD, Y_COORD_CD) )
 nypd_sub <- nypd_sub[complete.cases(nypd_sub[]),]
+
 summary(nypd_sub)
 ```
+
 ## Visualizing the Data
 
 ```{r}
@@ -54,6 +63,7 @@ ggplot(nypd_sub, aes(x = Year)) +
        y = "Count") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
 This first chart shows the shooting incidents grouped in a bar chart by year. I find it interesting that total shootings were in a decline until 2020 and then shot up by almost 1000. You would think that with lockdowns in place for the 2020 COVID Pandemic we would see a decline.
 
 ```{r}
@@ -73,7 +83,7 @@ ggplot(hourly_counts_df, aes(x = Hour, y = Frequency)) +
   theme_minimal()
 ```
 
-This second plot shows frequency of shootings compared to time of day. We can infer from this chart that as the day goes on there is more of a likeliehood of a shooting occuring during nighttime hours. 
+This second plot shows frequency of shootings compared to time of day. We can infer from this chart that as the day goes on there is more of a likeliehood of a shooting occuring during nighttime hours. Mornings and mid-day are the safest time and maybe could see less resources needed to combat violence ending with a shooting.
 
 ```{r}
 nypd_sub %>%
@@ -86,7 +96,8 @@ nypd_sub %>%
        y = "Incident Count") +
   theme_minimal()
 ```
-This chart shows total shootings by Borough. This chart gives a brief insight into boroughs that can be inferred as more dangerous or violent. I would like to dive deeper into this analysis in the future. More data can be used to supplement this and possibly give some leads into why we see more violent crime in these boroughs.
+
+This chart shows total shootings by Borough. This chart gives a brief insight into boroughs that can be inferred as more dangerous or violent. I would like to dive deeper into this analysis in the future. More data can be used to supplement this and possibly give some leads into why we see more violent crime in these boroughs. Is there enougn support to the community? Is it a financial issue seeing more crome and not enough police officers?
 
 ```{r}
 world_map <- ne_countries(scale = "medium", returnclass = "sf")
@@ -102,20 +113,33 @@ map +
   scale_fill_viridis_c(option = "plasma", name = "Density") + 
   theme_void()
 ```
-This last chart shows a desnity plot of shootings and where they occur. It backs up the bar chart above showing that Queens, Brooklyn, and the Bronx are the most frequent areas of a shooting occuring. 
+
+This last chart shows a density plot of shootings and where they occur. It backs up the bar chart above showing that Queens, Brooklyn, and the Bronx are the most frequent areas of a shooting occuring. Decision makers should put more support in those areas to combat these incidents.
 
 ## Data Model
 
 ```{r}
-nypd_mod_sub = subset(nypd, select = c(STATISTICAL_MURDER_FLAG, PRECINCT, X_COORD_CD, Y_COORD_CD))
+nypd_mod_sub <- subset(nypd, select = c(BORO, OCCUR_DATE, Hour, STATISTICAL_MURDER_FLAG, PRECINCT, VIC_SEX, VIC_RACE, PERP_AGE_GROUP, PERP_RACE, LOC_OF_OCCUR_DESC))
 
-nypd_mod_sub = na.omit(nypd_mod_sub)
-nypd_mod_sub$STATISTICAL_MURDER_FLAG <- as.numeric(nypd_mod_sub$STATISTICAL_MURDER_FLAG == "true")
+nypd_mod_sub <- nypd_mod_sub[nchar(nypd_mod_sub$PERP_RACE) > 0, ]
+nypd_mod_sub <- na.omit(nypd_mod_sub)
+nypd_mod_sub <- nypd_mod_sub %>%
+  filter(PERP_AGE_GROUP != "(null)") 
 
-model = lm(nypd_mod_sub$STATISTICAL_MURDER_FLAG ~ nypd_mod_sub$PRECINCT + nypd_mod_sub$X_COORD_CD + nypd_mod_sub$Y_COORD_CD)
+nypd_mod_sub <- nypd_mod_sub %>%
+  mutate(Year = substr(OCCUR_DATE, start = nchar(OCCUR_DATE) - 3, stop = nchar(OCCUR_DATE)),
+         Year = as.numeric(Year))
+
+nypd_mod_sub <- subset(nypd_mod_sub, select = -c(OCCUR_DATE))
+#nypd_mod_sub$Year <- as.factor(nypd_mod_sub$Year)
+
+
+model <- lm(Year ~ PERP_AGE_GROUP + BORO + Hour + LOC_OF_OCCUR_DESC, data = nypd_mod_sub)
+
 summary(model)
 ```
-Looking at the summary of this model, we can tell its a very poor model. With an $R^2$ of 0.00014 and a p-value of 0.2966 there is much to improve on future models. Using this as a predictor for where a murder might of occured is not something I would do.
+
+Looking at the summary of this model, we have a $R^2$ of 0.3625 and a p-value of 2.2e-16 there is some more digging or other data needed to support the variation of the model. Using this as a predictor for the factors that could affect what year a shooting occurs is possible.
 
 ## Potential Bias
 
@@ -126,4 +150,3 @@ We should also consider population of a borough, i.e. a borough with a lower pop
 ```{r}
 sessionInfo()
 ```
-
