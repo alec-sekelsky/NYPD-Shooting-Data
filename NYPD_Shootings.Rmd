@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## What are we looking for?
 
-In this analysis, I want to look for the neihgborhoods where shootings occur the most, as well as times of day and trends on when shootings occur to better inform decision makers on how to best use their law enforcement and community resources.
+In this analysis, I want to look for the neighborhoods where shootings occur the most, as well as times of day and trends on when shootings occur to better inform decision makers on how to best use their law enforcement and community resources.
 
 ## Importing Data and Libraries
 
